@@ -406,7 +406,7 @@
                     </button>
                 </div>
                 
-                <p class="text-xs text-slate-500">Sambungkan ke printer thermal 58mm (ESC/POS) langsung dari browser Chrome/Edge Mobile.</p>
+                <p class="text-xs text-slate-500">Sambungkan ke printer thermal 58mm (ESC/POS) langsung dari browser yang mendukung Web Bluetooth.</p>
 
                 <div class="space-y-2">
                     <button id="bt-connect-btn" onclick="connectBluetoothDevice()" class="w-full bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl py-2.5 text-xs flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/20">
@@ -483,10 +483,10 @@
         /* Global Application State */
         const APP_STATE = {
             store: {
-                name: "TOKO BERKAH JAYA",
-                address: "Jl. Merdeka No. 45, Jakarta",
-                phone: "0812-3456-7890",
-                footer: "Terima kasih atas kunjungan Anda!\nBarang yang sudah dibeli tidak dapat ditukar."
+                name: "",
+                address: "",
+                phone: "",
+                footer: ""
             },
             cart: [
                 { id: '1', name: 'Kopi Susu Gula Aren', qty: 2, price: 18000 },
@@ -864,47 +864,57 @@
 
         /* Web Bluetooth API Connection */
         async function connectBluetoothDevice() {
-            if (!navigator.bluetooth) {
-                showToast("Web Bluetooth tidak didukung browser ini. Gunakan Chrome Mobile!", "error");
+            if (!navigator.bluetooth || typeof navigator.bluetooth.requestDevice !== 'function') {
+                showToast("Browser ini tidak menyediakan Web Bluetooth. Bluetooth printer langsung dari halaman web hanya bisa digunakan pada browser yang mendukung Web Bluetooth.", "error");
                 return;
             }
 
             try {
                 showToast("Mencari printer bluetooth...");
+
                 const device = await navigator.bluetooth.requestDevice({
                     acceptAllDevices: true,
                     optionalServices: [
                         '000018f0-0000-1000-8000-00805f9b34fb',
                         '00001101-0000-0000-0000-00805f9b34fb',
                         '49535343-fe7d-4ae5-8fa9-9fafd205e455',
-                        'e7810a71-73ae-499d-8c15-faa9aef0c3f2'
+                        'e7810a71-73ae-499d-8c15-faa9aef0c3f2',
+                        '0000ffe0-0000-1000-8000-00805f9b34fb',
+                        '0000ff00-0000-1000-8000-00805f9b34fb'
                     ]
                 });
 
                 document.getElementById('bt-state-display').textContent = 'Menghubungkan...';
                 document.getElementById('bt-state-display').className = 'font-bold text-amber-500';
 
-                const server = await device.gatt.connect();
+                if (!device.gatt) throw new Error("Perangkat Bluetooth tidak mendukung koneksi GATT.");
+
+                const server = device.gatt.connected ? device.gatt : await device.gatt.connect();
                 APP_STATE.bluetoothDevice = device;
 
                 device.addEventListener('gattserverdisconnected', onBTDisconnected);
 
-                const services = await server.getPrimaryServices();
                 let writeChar = null;
+                const services = await server.getPrimaryServices();
 
+                // Cari karakteristik yang memang dapat menerima data cetak.
                 for (const service of services) {
                     const characteristics = await service.getCharacteristics();
                     for (const char of characteristics) {
-                        if (char.properties.write || char.properties.writeWithoutResponse) {
-                            writeChar = char;
-                            break;
+                        if (char.properties && (char.properties.writeWithoutResponse || char.properties.write)) {
+                            // Utamakan writeWithoutResponse karena banyak printer thermal menggunakannya.
+                            if (char.properties.writeWithoutResponse) {
+                                writeChar = char;
+                                break;
+                            }
+                            if (!writeChar && char.properties.write) writeChar = char;
                         }
                     }
-                    if (writeChar) break;
+                    if (writeChar && writeChar.properties.writeWithoutResponse) break;
                 }
 
                 if (!writeChar) {
-                    throw new Error("Layanan cetak ESC/POS tidak ditemukan di perangkat ini.");
+                    throw new Error("Karakteristik Bluetooth untuk menerima data cetak tidak ditemukan.");
                 }
 
                 APP_STATE.bluetoothCharacteristic = writeChar;
@@ -916,8 +926,11 @@
 
             } catch (error) {
                 console.error("BT Error:", error);
-                showToast(`Gagal connect: ${error.message || 'Dibatalkan'}`, "error");
+                APP_STATE.bluetoothDevice = null;
+                APP_STATE.bluetoothCharacteristic = null;
+                APP_STATE.isConnectedBT = false;
                 updateBTUI();
+                showToast(`Gagal connect: ${error.message || 'Dibatalkan'}`, "error");
             }
         }
 
@@ -994,10 +1007,13 @@
                 const chunkSize = 100;
                 for (let i = 0; i < bytes.length; i += chunkSize) {
                     const chunk = bytes.slice(i, i + chunkSize);
-                    if (APP_STATE.bluetoothCharacteristic.properties.writeWithoutResponse) {
-                        await APP_STATE.bluetoothCharacteristic.writeValueWithoutResponse(chunk);
+                    const characteristic = APP_STATE.bluetoothCharacteristic;
+                    if (characteristic.properties.writeWithoutResponse && typeof characteristic.writeValueWithoutResponse === 'function') {
+                        await characteristic.writeValueWithoutResponse(chunk);
+                    } else if (characteristic.properties.write && typeof characteristic.writeValue === 'function') {
+                        await characteristic.writeValue(chunk);
                     } else {
-                        await APP_STATE.bluetoothCharacteristic.writeValue(chunk);
+                        throw new Error("Browser atau printer tidak menyediakan metode pengiriman data Bluetooth yang kompatibel.");
                     }
                 }
 
