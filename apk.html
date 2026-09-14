@@ -390,7 +390,7 @@
             </button>
             <button onclick="switchTab('pengaturan')" id="nav-pengaturan" class="nav-btn flex flex-col items-center justify-center py-2.5 text-slate-400 transition">
                 <i class="fa-solid fa-gear text-base mb-0.5"></i>
-                <span class="text-[10px] font-bold">Toko</span>
+                <span class="text-[10px] font-bold">Pengaturan</span>
             </button>
         </nav>
 
@@ -1200,7 +1200,8 @@
             document.getElementById('setting-store-address').value = APP_STATE.store.address;
             document.getElementById('setting-store-phone').value = APP_STATE.store.phone;
             document.getElementById('setting-store-footer').value = APP_STATE.store.footer;
-            document.getElementById('store-subtitle').textContent = APP_STATE.store.name;
+            const storeSubtitle = document.getElementById('store-subtitle');
+            if (storeSubtitle) storeSubtitle.textContent = APP_STATE.store.name;
         }
 
         function saveStoreSettings(e) {
@@ -1210,7 +1211,8 @@
             APP_STATE.store.phone = document.getElementById('setting-store-phone').value.trim();
             APP_STATE.store.footer = document.getElementById('setting-store-footer').value;
 
-            document.getElementById('store-subtitle').textContent = APP_STATE.store.name;
+            const storeSubtitle = document.getElementById('store-subtitle');
+            if (storeSubtitle) storeSubtitle.textContent = APP_STATE.store.name;
             saveData();
             updateReceiptPreview();
             showToast("Pengaturan toko disimpan!");
