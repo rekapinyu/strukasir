@@ -172,6 +172,13 @@
                     </button>
                 </div>
 
+                <!-- Input Nama Pelanggan -->
+                <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-2">
+                    <label for="input-customer-name" class="text-xs font-semibold text-slate-600 block">Nama Pelanggan</label>
+                    <input type="text" id="input-customer-name" oninput="updateReceiptPreview()" placeholder="Masukkan nama pelanggan (opsional)"
+                        class="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-sm text-slate-800 placeholder-slate-400 focus:outline-none focus:bg-white focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/10 transition">
+                </div>
+
                 <!-- Form Quick Add Product Item -->
                 <div class="bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm space-y-3">
                     <div class="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center justify-between">
@@ -493,6 +500,7 @@
                 { id: '2', name: 'Roti Bakar Cokelat', qty: 1, price: 15000 }
             ],
             cashPaid: 50000,
+            customerName: '',
             catalog: [
                 { id: 'c1', name: 'Kopi Susu Gula Aren', price: 18000 },
                 { id: 'c2', name: 'Roti Bakar Cokelat', price: 15000 },
@@ -615,7 +623,10 @@
         function resetCart() {
             APP_STATE.cart = [];
             APP_STATE.cashPaid = 0;
+            APP_STATE.customerName = '';
             document.getElementById('input-cash-paid').value = '';
+            const customerInput = document.getElementById('input-customer-name');
+            if (customerInput) customerInput.value = '';
             renderCart();
             updateReceiptPreview();
             showToast("Keranjang dibersihkan.");
@@ -728,6 +739,8 @@
             const dateStr = now.toLocaleDateString('id-ID', { day: '2-digit', month: '2-digit', year: 'numeric' });
             const timeStr = now.toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit' });
             const receiptNo = 'INV-' + now.valueOf().toString().slice(-6);
+            const customerName = (document.getElementById('input-customer-name')?.value || APP_STATE.customerName || '').trim();
+            APP_STATE.customerName = customerName;
 
             let itemsHTML = '';
             if (APP_STATE.cart.length === 0) {
@@ -759,6 +772,10 @@
                 <div class="text-[9px] text-slate-600 border-t border-b border-dashed border-slate-300 py-1 my-1.5 flex justify-between">
                     <span>${dateStr} ${timeStr}</span>
                     <span class="font-bold">${receiptNo}</span>
+                </div>
+
+                <div class="text-[10px] text-slate-700 border-b border-dashed border-slate-300 pb-1.5 mb-1.5">
+                    <span class="font-bold">Pelanggan:</span> ${escapeHtml(customerName || '-')}
                 </div>
 
                 <!-- Item List -->
@@ -825,6 +842,8 @@
             push(0x1B, 0x61, 0x00); 
             pushText(`Tgl : ${dateStr}`);
             pushText(`No. : ${receiptNo}`);
+            pushText('--------------------------------');
+            pushText('Pelanggan: ' + (APP_STATE.customerName || '-'));
             pushText('--------------------------------');
 
             // Items List
@@ -1047,6 +1066,7 @@
                 id: 'INV-' + Date.now().toString().slice(-6),
                 date: new Date().toISOString(),
                 items: [...APP_STATE.cart],
+                customerName: APP_STATE.customerName || (document.getElementById('input-customer-name')?.value || '').trim(),
                 total: total,
                 cashPaid: cashPaid,
                 change: change
